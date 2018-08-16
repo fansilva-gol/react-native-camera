@@ -7,6 +7,12 @@ package com.lwansbrough.RCTCamera;
 
 import android.content.ContentValues;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Paint;
 import android.hardware.Camera;
 import android.media.*;
 import android.net.Uri;
@@ -834,8 +840,13 @@ public class RCTCameraModule extends ReactContextBaseJavaModule
         // ... do nothing
     }
 
-    private void resolveImage(final File imageFile, final int imgWidth, final int imgHeight, final Promise promise, boolean addToMediaStore) {
+    private void resolveImage(File imageFile, final int imgWidth, final int imgHeight, final Promise promise, boolean addToMediaStore) {
         final WritableMap response = new WritableNativeMap();
+
+        Bitmap bitMapOnGrayScale = toGrayscale(BitmapFactory.decodeFile(imageFile.getAbsolutePath()));
+
+        imageFile = overwriteExistingFile(imageFile, bitMapOnGrayScale);
+
         response.putString("path", Uri.fromFile(imageFile).toString());
         response.putInt("width", imgWidth);
         response.putInt("height", imgHeight);
@@ -861,6 +872,54 @@ public class RCTCameraModule extends ReactContextBaseJavaModule
         } else {
             promise.resolve(response);
         }
+    }
+
+    private File overwriteExistingFile(File oldFile, Bitmap bitMapOnGrayScaleToOverrideOldFile) {
+        try {
+            String oldFilePath = oldFile.getAbsolutePath();
+            String oldFileName = oldFile.getName();
+            oldFile.delete();
+
+            File newFileOnGrayScale = new File(oldFilePath + File.separator + oldFileName);
+            newFileOnGrayScale.createNewFile();
+
+            //Convert bitmap to byte array
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            bitMapOnGrayScaleToOverrideOldFile.compress(Bitmap.CompressFormat.PNG, 0 /*ignored for PNG*/, bos);
+            byte[] bitmapdata = bos.toByteArray();
+
+            FileOutputStream fos = new FileOutputStream(newFileOnGrayScale);
+            fos.write(bitmapdata);
+            fos.flush();
+            fos.close();
+            return newFileOnGrayScale;
+        } catch (IOException ioe) {
+            return null;
+        }
+    }
+
+    /**
+     * Metodo que transforma um Bitmap em GrayScale
+     *
+     * @param bmpOriginal
+     * @return
+     */
+    public static Bitmap toGrayscale(Bitmap bmpOriginal) {
+        try {
+            final int height = bmpOriginal.getHeight();
+            final int width = bmpOriginal.getWidth();
+
+            final Bitmap bmpGrayscale = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
+            Canvas c = new Canvas(bmpGrayscale);
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(0);
+            ColorMatrixColorFilter f = new ColorMatrixColorFilter(cm);
+            Paint paint = new Paint();
+            paint.setColorFilter(f);
+            c.drawBitmap(bmpOriginal, 0, 0, paint);
+            return bmpGrayscale;
+        }
+        catch (NullPointerException ne) { return null; }
     }
 
 }
